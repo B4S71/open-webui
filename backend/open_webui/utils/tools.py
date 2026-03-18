@@ -51,6 +51,10 @@ from open_webui.env import (
     FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
 )
 from open_webui.utils.headers import include_user_info_headers
+from open_webui.utils.task_manager import (
+    build_background_task_manager,
+    inject_task_manager_params,
+)
 from open_webui.tools.builtin import (
     search_web,
     fetch_url,
@@ -150,6 +154,10 @@ async def get_tools(
     """Load tools for the given tool_ids, checking access control."""
     if not tool_ids:
         return {}
+
+    task_manager = build_background_task_manager(request, extra_params)
+    if task_manager is not None:
+        extra_params = inject_task_manager_params(extra_params, task_manager)
 
     tools_dict = {}
 
@@ -545,6 +553,8 @@ def get_builtin_tools(
                 "__metadata__": extra_params.get("__metadata__"),
                 "__chat_id__": extra_params.get("__chat_id__"),
                 "__message_id__": extra_params.get("__message_id__"),
+                "__task_manager__": extra_params.get("__task_manager__"),
+                "_task_manager_": extra_params.get("_task_manager_"),
                 "__model_knowledge__": model_knowledge,
             },
         )
