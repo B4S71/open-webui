@@ -48,6 +48,36 @@ async def test_background_task_manager_spawn_updates_and_cleans_up():
     assert getattr(app_state, "tool_background_tasks", None) == set()
 
 
+@pytest.mark.asyncio
+async def test_background_task_manager_spawn_shows_failure_message_on_error():
+    event_emitter = AsyncMock()
+    app_state = SimpleNamespace()
+    task_manager = BackgroundTaskManager(
+        app_state=app_state,
+        chat_id="chat-id",
+        message_id="message-id",
+        event_emitter=event_emitter,
+    )
+
+    async def worker(_updater):
+        raise RuntimeError("boom")
+
+    task = task_manager.spawn(worker)
+    await task
+
+    event_emitter.assert_awaited_once_with(
+        {
+            "type": "replace",
+            "data": {
+                "chat_id": "chat-id",
+                "message_id": "message-id",
+                "content": "⚠️ Background task failed: boom",
+            },
+        }
+    )
+    assert getattr(app_state, "tool_background_tasks", None) == set()
+
+
 def test_build_background_task_manager_uses_tool_context():
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
     event_emitter = AsyncMock()

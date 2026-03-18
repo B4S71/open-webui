@@ -90,6 +90,12 @@ class BackgroundTaskManager:
             setattr(self._app_state, BACKGROUND_TASKS_REGISTRY_ATTR, registry)
         return registry
 
+    def _build_failure_message(self, error: Exception) -> str:
+        error_message = str(error).strip()
+        if error_message:
+            return f"⚠️ Background task failed: {error_message}"
+        return "⚠️ Background task failed"
+
     async def _run_worker(self, worker_func):
         updater = LiveMessageUpdater(
             chat_id=self.chat_id,
@@ -103,12 +109,20 @@ class BackgroundTaskManager:
                 await result
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             log.exception(
                 "Background tool task failed for message %s in chat %s",
                 self.message_id,
                 self.chat_id,
             )
+            try:
+                await updater.update(self._build_failure_message(error))
+            except Exception:
+                log.exception(
+                    "Failed to publish background task failure for message %s in chat %s",
+                    self.message_id,
+                    self.chat_id,
+                )
         finally:
             await updater.finish()
 
