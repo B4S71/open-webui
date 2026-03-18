@@ -6,8 +6,30 @@ from typing import Awaitable, Callable, Optional
 
 log = logging.getLogger(__name__)
 
+TASK_MANAGER_PARAM_NAMES = ("__task_manager__", "_task_manager_")
+BACKGROUND_TASKS_REGISTRY_ATTR = "tool_background_tasks"
+
+
+def get_existing_task_manager(extra_params: dict):
+    for key in TASK_MANAGER_PARAM_NAMES:
+        if extra_params.get(key) is not None:
+            return extra_params[key]
+    return None
+
+
+def inject_task_manager_params(extra_params: dict, task_manager):
+    # Support both the canonical internal name and the lighter alias used in
+    # tool examples so custom tools can opt in without breaking either style.
+    return {
+        **extra_params,
+        "__task_manager__": task_manager,
+        "_task_manager_": task_manager,
+    }
+
 
 class LiveMessageUpdater:
+    """Helper that pushes live content replacements to a specific chat message."""
+
     def __init__(
         self,
         chat_id: str,
@@ -46,6 +68,8 @@ class LiveMessageUpdater:
 
 
 class BackgroundTaskManager:
+    """Spawn and track app-scoped background tasks for a tool-triggered message."""
+
     def __init__(
         self,
         app_state,
@@ -59,10 +83,11 @@ class BackgroundTaskManager:
         self._event_emitter = event_emitter
 
     def _get_registry(self) -> set[asyncio.Task]:
-        registry = getattr(self._app_state, "tool_background_tasks", None)
+        """Return the app-scoped task registry, creating it on first use."""
+        registry = getattr(self._app_state, BACKGROUND_TASKS_REGISTRY_ATTR, None)
         if registry is None:
             registry = set()
-            setattr(self._app_state, "tool_background_tasks", registry)
+            setattr(self._app_state, BACKGROUND_TASKS_REGISTRY_ATTR, registry)
         return registry
 
     async def _run_worker(self, worker_func):
@@ -88,6 +113,7 @@ class BackgroundTaskManager:
             await updater.finish()
 
     def spawn(self, worker_func):
+        """Create, register, and return a background task for the given worker."""
         task = asyncio.create_task(self._run_worker(worker_func))
         registry = self._get_registry()
         registry.add(task)
@@ -96,12 +122,11 @@ class BackgroundTaskManager:
 
 
 def build_background_task_manager(request, extra_params: dict):
+    """Build a task manager from tool context, or return None if context is incomplete."""
     if request is None:
         return None
 
-    existing_task_manager = extra_params.get("__task_manager__") or extra_params.get(
-        "_task_manager_"
-    )
+    existing_task_manager = get_existing_task_manager(extra_params)
     if existing_task_manager is not None:
         return existing_task_manager
 
@@ -110,7 +135,7 @@ def build_background_task_manager(request, extra_params: dict):
     message_id = extra_params.get("__message_id__") or metadata.get("message_id")
     event_emitter = extra_params.get("__event_emitter__")
 
-    if not chat_id or not message_id or event_emitter is None:
+    if chat_id is None or message_id is None or event_emitter is None:
         return None
 
     return BackgroundTaskManager(

@@ -51,7 +51,10 @@ from open_webui.env import (
     FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
 )
 from open_webui.utils.headers import include_user_info_headers
-from open_webui.utils.task_manager import build_background_task_manager
+from open_webui.utils.task_manager import (
+    build_background_task_manager,
+    inject_task_manager_params,
+)
 from open_webui.tools.builtin import (
     search_web,
     fetch_url,
@@ -154,11 +157,7 @@ async def get_tools(
 
     task_manager = build_background_task_manager(request, extra_params)
     if task_manager is not None:
-        extra_params = {
-            **extra_params,
-            "__task_manager__": task_manager,
-            "_task_manager_": task_manager,
-        }
+        extra_params = inject_task_manager_params(extra_params, task_manager)
 
     tools_dict = {}
 

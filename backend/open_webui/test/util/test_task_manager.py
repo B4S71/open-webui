@@ -45,7 +45,7 @@ async def test_background_task_manager_spawn_updates_and_cleans_up():
             },
         }
     )
-    assert getattr(app_state, "tool_background_tasks") == set()
+    assert getattr(app_state, "tool_background_tasks", None) == set()
 
 
 def test_build_background_task_manager_uses_tool_context():
